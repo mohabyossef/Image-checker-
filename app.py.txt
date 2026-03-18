@@ -1,0 +1,49 @@
+import gradio as gr
+from google import genai
+from google.genai import types
+import PIL.Image
+import io
+
+# Setup Client (You can also use st.secrets on HF for the API key)
+def process_image(input_img, api_key):
+    if not api_key:
+        return None, "Please enter an API Key."
+    
+    client = genai.Client(api_key=api_key)
+    
+    # Convert PIL to bytes
+    img_byte_arr = io.BytesIO()
+    input_img.save(img_byte_arr, format='JPEG')
+    img_bytes = img_byte_arr.getvalue()
+
+    prompt = "Remove all text from this image. Enhance details and quality. Output a clear 1200x1200px image."
+
+    response = client.models.generate_content(
+        model="gemini-3.1-flash-image-preview",
+        contents=[prompt, types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")],
+        config=types.GenerateContentConfig(
+            response_modalities=["IMAGE"],
+            image_config=types.ImageConfig(aspect_ratio="1:1", image_size="1200")
+        )
+    )
+
+    # Return the image data
+    return PIL.Image.open(io.BytesIO(response.candidates[0].content.parts[0].inline_data.data)), "Success!"
+
+# Build Gradio Interface
+with gr.Blocks(theme=gr.themes.Soft()) as demo:
+    gr.Markdown("# 🍌 Nano Banana Image Cleaner")
+    
+    with gr.Row():
+        with gr.Column():
+            api_input = gr.Textbox(label="Gemini API Key", type="password")
+            image_input = gr.Image(type="pil", label="Upload Image")
+            btn = gr.Button("🚀 Process Image", variant="primary")
+        
+        with gr.Column():
+            image_output = gr.Image(label="Cleaned 1200x1200px Result")
+            status_output = gr.Textbox(label="Status")
+
+    btn.click(process_image, inputs=[image_input, api_input], outputs=[image_output, status_output])
+
+demo.launch()
